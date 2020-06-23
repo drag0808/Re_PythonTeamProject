@@ -12,6 +12,9 @@ import telepot
 import copy
 import requests
 import smtplib
+import spam
+
+from tkinter import messagebox #확인창
 
 class MainGUI:
 
@@ -20,11 +23,11 @@ class MainGUI:
         graph_title, GraphCanvas, graph_bar, graph_label1, graph_label2, \
         map_conn, map_client_id, map_server, MapDataList
 
-    fileName = "D:\3학년\스크립트\텀프로젝트\중간\교통사고_TkInter/교통사고정보.txt"
+    fileName = "교통사고정보.txt"
 
     ##################      교통사고 데이터 받아오는 정보        ###################################################
     conn = None
-    client_id = "t5oMrbXTtq4jIGLnhsqeY3dgl6ZE7OJvp7W6VWLABuIThDD%2BTxc88xEit9tU0gS%2BtDWK9x%2BPzMk7tpwq1zwoYw%3D%3D"
+    client_id = ""
 
     searchYearCd = ""
     siDo = ""
@@ -37,7 +40,7 @@ class MainGUI:
 
     ###################     지도 좌표 받아오는 정보        ###################################################
     map_conn = None
-    map_client_id = "CB54EED6-EA76-39F9-81EE-0B601E4B4FD0"
+    map_client_id = ""
 
     # OpenAPI 접속 정보 information
     map_server = "http://api.vworld.kr"
@@ -51,9 +54,9 @@ class MainGUI:
     # port = "587"
 
     # 챗 아이디
-    chatId = '1164557859'
+    chatId = ''
     # 텔레그램 챗 봇
-    chatBot = telepot.Bot('1210310534:AAHwFLrsxmEJzDhTT-Gmp5vbZ_luN0aXUqg')
+    chatBot = telepot.Bot('')
 
 
     DataList = []  # 검색해서 받은 정보를 저장할 리스트.
@@ -79,8 +82,6 @@ class MainGUI:
     #   2 : 사고 횟수
     #
     #
-    #
-    #   추가 예정
     #
     #
     #        <acc_cl_nm>노인사고</acc_cl_nm>                  # 사고 종류
@@ -122,6 +123,19 @@ class MainGUI:
             chatBot.sendMessage(chatId, '지역명 : ' + data[0] + '사고 종류 : ' + data[1] + '사고 횟수 : ' + str(data[2]))
 
 
+    def click_email(self):
+
+        self.email_top = Toplevel(self.window)
+        self.email_label = Label(self.email_top, text="받으실 메일 주소를 입력하세요")
+        self.email_label.place(x=10, y=10)
+        self.email_entrybox = Entry(self.email_top, width=25)
+        self.email_entrybox.place(x=10, y=35)
+        self.email_top.geometry('200x90+200+300')
+
+        self.email_OK = Button(self.email_top, text='확인', command=self.googleLoginAndSendEmail)
+        self.email_OK.place(x=80, y=60)
+        self.email_top.deiconify()
+
     # 2020 / 06 / 17 김현식
     # gmail 로그인과 본인에게 Email 보내기 기능 구현
     def googleLoginAndSendEmail(self):
@@ -133,8 +147,12 @@ class MainGUI:
 
         htmlTxt = self.MakeHtmlDoc(Data_to_tkinter)
 
-        senderAddr = ""
+        senderAddr = "khstest0808@gmail.com"
+
+
         recipientAddr = ""
+
+
         msg = MIMEBase("multipart", "alternative")
         msg['Subject'] = "AccTeamProject "+self.searchPlaceInput.get()+" 사고내역"
         msg['From'] = senderAddr
@@ -157,7 +175,15 @@ class MainGUI:
         mySmtp.starttls()
         mySmtp.ehlo()
         mySmtp.login(senderAddr, "")
+
+        recipientAddr = self.email_entrybox.get()  # 앞에서 받아온 이메일
+
         mySmtp.sendmail(senderAddr, [recipientAddr], msg.as_string())
+
+        self.email_entrybox.delete(0, 'end') #초기화
+        self.email_top.withdraw() #창삭제
+        msg = messagebox.showinfo("EMAIL", "전송 완료!")
+
         mySmtp.close()
 
     def MakeHtmlDoc(self, searchReturn): # HTML로 변환
@@ -172,12 +198,17 @@ class MainGUI:
 
         # Body 엘리먼트 생성.
         body = newdoc.createElement('body')
-
+        whereName = ""
         for item in searchReturn:
             # create 주소 엘리먼트
             where = newdoc.createElement('where')
             # create text node
-            whereText = newdoc.createTextNode("   주소 :" + item[0])
+            if whereName == item[0]:
+                whereText = newdoc.createTextNode("   주소 :" + item[0])
+            else:
+                whereText = newdoc.createTextNode("\n" + "   주소 :" + item[0])
+            whereName = item[0]
+
             where.appendChild(whereText)
 
             body.appendChild(where)
@@ -258,10 +289,12 @@ class MainGUI:
     def GetAllMapDataFromSidoSgg(self, searchWord):
         global map_client_id, map_server
 
-        map_req = requests.get("http://map.vworld.kr/search.do?category=jibun&q="+searchWord+"&pageunit=10000&output=xml&pageindex=100&apiKey="+map_client_id)
+        map_req = requests.get(
+            "http://api.vworld.kr/req/search?service=search&request=search&version=2.0&size=1000&page=10&query=" + searchWord + "&type=place&format=xml&key=" + map_client_id)
         map_req.status_code
 
         return self.ExtractMapData(map_req.text)
+
 
     # 2020. 06. 17
     # 맵 좌표를 검색한 이름으로 받아와서 저장하기.
@@ -275,16 +308,17 @@ class MainGUI:
         # Acc 엘리먼트를 가져옵니다.
         itemElements = list(tree.iter("item"))  # return list type
         for item in itemElements:
-            road_name = item.find("JUSO")
-            point_x = item.find("xpos")
-            point_y = item.find("ypos")
-            print(road_name.text + "  : " + point_x.text + " " +point_y.text)
+            road_name = item.find("title")
+            pointXY = item.find("point")
+            point_x = pointXY.find("x")
+            point_y = pointXY.find(("y"))
+            #########
             if len(road_name.text) > 0:
                 MapDataList.append((road_name.text, point_x.text, point_y.text))
         b = set(MapDataList)
         MapDataList = list(b)
+        print(len(MapDataList))
         self.sortByName(MapDataList)
-        pass
 
 
     def sortFromAllAcc(self, DataList, areaKey):
@@ -428,24 +462,23 @@ class MainGUI:
         mapY = allY / count
 
         if len(Data_to_tkinter) > 6:
-            zoom = 9
+            zoom = 10
         else:
-            zoom = 13
+            zoom = 12
 
         # 위도 경도 지정
         map_osm = folium.Map(location=[mapY, mapX], zoom_start=zoom)
         # 마커 지정
-        #folium.Marker([mapY, mapX], popup="").add_to(map_osm)
+        folium.Marker([mapY, mapX], popup="").add_to(map_osm)
         # html 파일로 저장
         map_osm.save('osm.html')
         webbrowser.open_new('osm.html')
-
 
     def sendMessage(self, message): # 텔레그램 봇으로 메세지 보내기
         global chatBot, chatId
         chatBot.sendMessage(chatId, message)
 
-    def DataSaveAndDataFree():
+    def DataSaveAndDataFree(self):
         global DataList, sortData_Num, sortData, DataList_sortData, searchYearCd, fileName
 
         file = open(fileName, 'w')  # 쓰기전용 파일 열기
@@ -542,10 +575,10 @@ class MainGUI:
         self.tab.pack()
         self.tab.place(x=25, y=80)
         self.frame_search = ttk.Frame(self.window, width=550, height=530, relief=SOLID)
-        self.frame_bookmark = ttk.Frame(self.window, width=550, height=530, relief=SOLID)
+        self.frame_etc = ttk.Frame(self.window, width=550, height=530, relief=SOLID)
 
         self.tab.add(self.frame_search, text='검색')
-        self.tab.add(self.frame_bookmark, text='북마크')
+        self.tab.add(self.frame_etc, text='설명서')
 
         self.SearchLabel = Label(self.window, text="지역명 검색")
         self.SearchLabel.place(x=25, y=50)
@@ -561,6 +594,22 @@ class MainGUI:
         self.logo=PhotoImage(file="교통사고알리미.gif")
         self.logo_label=Label(self.window, image=self.logo)
         self.logo_label.place(x=280, y=8)
+
+
+        ##설명서
+        self.producer = Label(self.frame_etc, text="                                                  "
+                                                   "Madeby\n엔터테인먼트컴퓨팅학과 2016184010 김현식\n엔터테인먼트컴퓨팅학과 2016184021 서승환")
+        self.producer.place(x=270, y=460)
+        self.explainmap=PhotoImage(file="설명서.png")
+        self.explainmap_label=Label(self.frame_etc, image=self.explainmap)
+        self.explainmap_label.place(x=5, y=2)
+
+        self.kcdc=PhotoImage(file="KCDC로고.png")
+        self.kcdc_label=Label(self.frame_etc, image=self.kcdc)
+        self.kcdc_label.place(x=10, y=400)
+        self.kpu=PhotoImage(file="vworld로고.png")
+        self.kpu_label=Label(self.frame_etc, image=self.kpu)
+        self.kpu_label.place(x=10, y=470)
 
 
         # 수정 : 2020/06/06, 김현식
@@ -605,13 +654,20 @@ class MainGUI:
 
         #이메일 출력버튼 생성
         self.mailimg = PhotoImage(file="googlemail.gif")
-        self.mapButton = Button(self.window,text = 'google mail!', image=self.mailimg, command=self.googleLoginAndSendEmail)
+        self.mapButton = Button(self.window,text = 'google mail!', image=self.mailimg, command=self.click_email)
         self.mapButton.place(x=460, y=60)
 
         #텔레그램 출력버튼생성
         self.telegramimg = PhotoImage(file="telegramlogo.gif")
-        self.mapButton = Button(self.window, text='google mail!', image=self.telegramimg, command=self.sendMessageButtonPush)
+        self.mapButton = Button(self.window, text='telegram!', image=self.telegramimg, command=self.sendMessageButtonPush)
         self.mapButton.place(x=510, y=60)
+
+        #저장버튼
+        self.save = PhotoImage(file="save.gif")
+        self.mapButton = Button(self.window, text='save!', image=self.save, command=self.DataSaveAndDataFree)
+        self.mapButton.place(x=360, y=60)
+
+
 
 
     def SelectSortData(event):
@@ -658,9 +714,6 @@ class MainGUI:
     def UpdateGraph(self):
         global GraphCanvas, graph_bar, DataList_sortData, RenderText, graph_label1, graph_label2, graph_title
 
-        RenderText.configure(state='normal')
-        RenderText.insert(INSERT, '함수들어왔다.')
-
         for bar in graph_bar:
             GraphCanvas.delete(bar)  # 초기화
         graph_bar.clear()
@@ -685,7 +738,10 @@ class MainGUI:
             graph_label2[count].pack()
             graph_label2[count].place(x=(startXName + (count * 100)), y=500)
 
-            rect = (40 + (count * 100)), 140 - i[2] / bestRecod, (55 + (count * 100)), 140
+            spamGraph = spam.getGraphRect(i[2], count, int(bestRecod));
+            rect = spamGraph[0], spamGraph[1], spamGraph[2], spamGraph[3]
+
+            #rect = (40 + (count * 100)), 140 - i[2] / bestRecod, (55 + (count * 100)), 140
             graph_bar.append(GraphCanvas.create_rectangle(rect, fill="blue"))
 
             count += 1
@@ -704,9 +760,8 @@ class MainGUI:
 
         self.YearCombo.current(6)
 
-    def year_event(self, event): ##연도넣으면 그연도에 맞는 교통사고정보
+    def year_event(self, a):
         pass
-
 
 MainGUI()
 
